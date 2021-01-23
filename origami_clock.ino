@@ -1,10 +1,17 @@
 int LEDS[12] = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13};
+int POT = A0;
+int PHOTO = A1;
 
 int INVALID = -1;
 
 struct Time {
   int hour;
   int minute;
+};
+
+Time currentTime = {
+  .hour = INVALID,
+  .minute = INVALID,
 };
 
 Time getTimeFromUser();
@@ -14,18 +21,21 @@ void setupLeds();
 void turnAllOff();
 void setHour(int hour);
 void setMinute(int minute);
+bool isTriggered();
 
 void setup() {
-  setupLeds();
   Serial.begin(9600);
+  setupLeds();
+  
+  // Wait until we receive a valid time to display (this will eventually happen in the loop, based on the RTC module).
+  while (currentTime.hour == INVALID && currentTime.minute == INVALID) {
+    // wait for input from the user with the time.  Time must be formatted as HH:mm.  Eventually we'll check the time from the RTC module.
+    currentTime = getTimeFromUser();
+  }
 }
 
 void loop() {
-  // wait for input from the user with the time.  Time must be formatted as HH:mm.  Eventually we'll wait for the photoresistor and check the time from the RTC module.
-  Time currentTime = getTimeFromUser();
-
-  // Skip things that are not times.
-  if (currentTime.hour == INVALID && currentTime.minute == INVALID) return;
+  while (!isTriggered()) {} // Wait for the photoresistor to be toggled on.
 
   // turn everything off
   turnAllOff();
@@ -35,6 +45,15 @@ void loop() {
 
   // light up the minute
   setMinute(currentTime.minute);
+
+  delay(3000); // Allow a few seconds for the user to move the laser away.
+
+  while (!isTriggered()) {} // Wait for the photoresistor to be toggled off.
+  
+  // turn everything off, and start the loop over.
+  turnAllOff();
+  
+  delay(3000); // Allow a few seconds for the user to move the laser away.
 }
 
 void setupLeds() {
@@ -75,6 +94,7 @@ Time getTimeFromUser() {
   parsedTime.hour = parseHour(timeInput);
   parsedTime.minute = parseMinute(timeInput);
   Serial.println("Selected time: " + String(parsedTime.hour) + ":" + String(parsedTime.minute));
+  // Tell any Serial listeners to set their minute hand, only.
   Serial.println("Setting minute to:");
   Serial.println("--:" + String(parsedTime.minute));
   return parsedTime;
@@ -96,4 +116,10 @@ void setMinute(int minute) {
   if (minute == INVALID) return; // Ignore this, it's not a valid minute.
   int pin = minute / 5;
   digitalWrite(LEDS[pin], HIGH);
+}
+
+bool isTriggered() {
+  int potVal = analogRead(POT);
+  int photoVal = analogRead(PHOTO);
+  return photoVal >= potVal;
 }

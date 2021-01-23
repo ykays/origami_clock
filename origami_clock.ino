@@ -1,4 +1,5 @@
 int LEDS[12] = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13};
+int CENTER_LED = A2;
 int POT = A0;
 int PHOTO = A1;
 
@@ -60,7 +61,13 @@ void setupLeds() {
   for (int pin = 0; pin < 12; pin++) {
     pinMode(LEDS[pin], OUTPUT);
   }
+  pinMode(CENTER_LED, OUTPUT);
+  
   turnAllOff();
+  
+  digitalWrite(CENTER_LED, HIGH);
+  delay(250);
+  digitalWrite(CENTER_LED, LOW);
   for (int pin = 0; pin < 12; pin++) {
     digitalWrite(LEDS[pin], HIGH);
     delay(250);
@@ -105,11 +112,13 @@ void turnAllOff() {
   for (int pin = 0; pin < 12; pin++) {
     digitalWrite(LEDS[pin], LOW);
   }
+  digitalWrite(CENTER_LED, LOW);
 }
 
 void setHour(int hour) {
   if (hour == INVALID) return; // Ignore this, it's not a valid hour.
   digitalWrite(LEDS[hour % 12], HIGH);
+  digitalWrite(CENTER_LED, HIGH);
 }
 
 void setMinute(int minute) {

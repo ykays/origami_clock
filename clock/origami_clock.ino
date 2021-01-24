@@ -27,7 +27,9 @@ void setupLeds();
 void turnAllOff();
 void lightHour(byte hour);
 void lightMinute(byte minute);
-bool isTriggered();
+bool isLaserTouching();
+bool clockOn = true;
+bool needsUpdate = false;
 
 void setup() {
   Serial.begin(9600);
@@ -37,36 +39,43 @@ void setup() {
   // Wait until we receive a valid time to display (this will eventually happen in the loop, based on the RTC module).
   while (currentTime.hour == INVALID && currentTime.minute == INVALID) {
     // wait for input from the user with the time.  Time must be formatted as HH:mm.  Eventually we'll check the time from the RTC module.
-    currentTime = getTimeFromUser();
+    //currentTime = getTimeFromUser();
+    currentTime.hour = 12;
+    currentTime.minute = 45;
   }
 }
 
 void loop() {
-  while (!isTriggered()) {} // Wait for the photoresistor to be toggled on.
+  // Check whether the laser is turning the clock on/off.
+  if (isLaserTouching()) {
+    clockOn = !clockOn;
+    needsUpdate = true;
+  }
 
-  // turn everything off
-  turnAllOff();
-
-  // Update the time from the rtc module.
+  // Check whether the time has changed in the rtc module.
   bool h12;
   bool pmTime;
-  currentTime.hour = rtc.getHour(h12, pmTime);
-  currentTime.minute = rtc.getMinute();
+  Time newTime = {
+    .hour = rtc.getHour(h12, pmTime),
+    .minute = rtc.getMinute(),
+  };
+  if (newTime.hour != currentTime.hour || newTime.minute != currentTime.minute) {
+    currentTime = newTime;
+    needsUpdate = true;
+  }
 
-  // light up the hour
-  lightHour(currentTime.hour);
+  if (!needsUpdate) return;
 
-  // light up the minute
-  lightMinute(currentTime.minute);
-
-  delay(3000); // Allow a few seconds for the user to move the laser away.
-
-  while (!isTriggered()) {} // Wait for the photoresistor to be toggled off.
-
-  // turn everything off, and start the loop over.
   turnAllOff();
+  if (clockOn) {
+    // light up the hour
+    lightHour(currentTime.hour);
+    // light up the minute
+    lightMinute(currentTime.minute);
+  }
 
-  delay(3000); // Allow a few seconds for the user to move the laser away.
+  needsUpdate = false;
+  delay(3000); // Wait a few seconds before updating again.
 }
 
 void setupLeds() {
@@ -145,7 +154,7 @@ void lightMinute(byte minute) {
   digitalWrite(LEDS[pin], HIGH);
 }
 
-bool isTriggered() {
+bool isLaserTouching() {
   int potVal = analogRead(POT);
   int photoVal = analogRead(PHOTO);
   return photoVal >= potVal;

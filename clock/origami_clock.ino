@@ -5,6 +5,7 @@ int LEDS[12] = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13};
 int CENTER_LED = A2;
 int POT = A0;
 int PHOTO = A1;
+int IS_CHILD_PIN = A3;
 
 byte INVALID = -1;
 
@@ -21,6 +22,7 @@ Time currentTime = {
 };
 
 Time getTimeFromUser();
+Time getTimeFromRtc();
 byte parseHour(char* timeInput);
 byte parseMinute(char* timeInput);
 byte parseSecond(char* timeInput);
@@ -49,14 +51,9 @@ void loop() {
   }
 
   // Check whether the time has changed in the rtc module.
-  bool h12;
-  bool pmTime;
-  Time newTime = {
-    .hour = rtc.getHour(h12, pmTime),
-    .minute = rtc.getMinute(),
-  };
-  if (newTime.hour != currentTime.hour || newTime.minute != currentTime.minute) {
-    currentTime = newTime;
+  Time rtcTime = getTimeFromRtc();
+  if (rtcTime.hour != currentTime.hour || rtcTime.minute != currentTime.minute) {
+    currentTime = rtcTime;
     needsUpdate = true;
   }
 
@@ -75,7 +72,7 @@ void loop() {
 
   if (clockOn) {
     // Tell any Serial listeners to set their minute hand.
-    Serial.println("--:" + String(currentTime.minute) + ":--");
+    Serial.println("--:" + String(currentTime.minute) + ":00");
 
     // light up the hour
     lightHour(currentTime.hour);
@@ -124,6 +121,18 @@ byte parseSecond(String timeInput) {
   String second = timeInput.substring(6, 8);
   if (!isDigit(second.charAt(0)) && !isDigit(second.charAt(1))) return INVALID;
   return (byte)(second.toInt());
+}
+
+Time getTimeFromRtc() {
+  bool isChild = digitalRead(IS_CHILD_PIN);
+  if (isChild) return currentTime;  // Children only get time from parent rings (serial).
+  bool h12;
+  bool pmTime;
+  Time rtcTime = {
+    .hour = rtc.getHour(h12, pmTime),
+    .minute = rtc.getMinute(),
+  };
+  return rtcTime;
 }
 
 /** Waits for the user to send a time over serial.

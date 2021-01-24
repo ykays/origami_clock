@@ -23,6 +23,7 @@ Time currentTime = {
 Time getTimeFromUser();
 byte parseHour(char* timeInput);
 byte parseMinute(char* timeInput);
+byte parseSecond(char* timeInput);
 void setupLeds();
 void turnAllOff();
 void lightHour(byte hour);
@@ -36,13 +37,8 @@ void setup() {
   Wire.begin();
   setupLeds();
 
-  // Wait until we receive a valid time to display (this will eventually happen in the loop, based on the RTC module).
-  while (currentTime.hour == INVALID && currentTime.minute == INVALID) {
-    // wait for input from the user with the time.  Time must be formatted as HH:mm.  Eventually we'll check the time from the RTC module.
-    //currentTime = getTimeFromUser();
-    currentTime.hour = 12;
-    currentTime.minute = 45;
-  }
+  delay(1000);
+  Serial.println("Please enter the time to display (HH:mm:ss): ");
 }
 
 void loop() {
@@ -64,10 +60,23 @@ void loop() {
     needsUpdate = true;
   }
 
+  // Check whether the user entered a new time over serial.
+  Time userTime = getTimeFromUser();
+  if (userTime.hour != currentTime.hour || userTime.minute != currentTime.minute) {
+    currentTime = userTime;
+    needsUpdate = true;
+  }
+
   if (!needsUpdate) return;
 
+  delay(50);
+
   turnAllOff();
+
   if (clockOn) {
+    // Tell any Serial listeners to set their minute hand.
+    Serial.println("--:" + String(currentTime.minute) + ":--");
+
     // light up the hour
     lightHour(currentTime.hour);
     // light up the minute
@@ -110,27 +119,39 @@ byte parseMinute(String timeInput) {
   return (byte)(minute.toInt());
 }
 
+/** Returns -1 if the input is not a number. */
+byte parseSecond(String timeInput) {
+  String second = timeInput.substring(6, 8);
+  if (!isDigit(second.charAt(0)) && !isDigit(second.charAt(1))) return INVALID;
+  return (byte)(second.toInt());
+}
+
 /** Waits for the user to send a time over serial.
  *  - The time should be in the format HH:mm.
  *  - The function will block and the return the string.
  */
 Time getTimeFromUser() {
-  Serial.println("Please enter the time to display (HH:mm): ");
-  while (!Serial.available()) {} // Do nothing until there's a string available.
+  if (!Serial.available()) return currentTime;
+
   String timeInput = Serial.readStringUntil('\n');
   struct Time parsedTime;
   parsedTime.hour = parseHour(timeInput);
   parsedTime.minute = parseMinute(timeInput);
+  byte parsedSecond = parseSecond(timeInput);
+  if (parsedTime.hour == INVALID && parsedTime.minute == INVALID) {
+    Serial.println("Ignoring non-time: " + timeInput);
+    return currentTime;
+  }
   if (parsedTime.hour != INVALID) {
     rtc.setHour(parsedTime.hour);
   }
   if (parsedTime.minute != INVALID) {
     rtc.setMinute(parsedTime.minute);
   }
-  Serial.println("Selected time: " + String(parsedTime.hour) + ":" + String(parsedTime.minute));
-  // Tell any Serial listeners to set their minute hand, only.
-  Serial.println("Setting minute to:");
-  Serial.println("--:" + String(parsedTime.minute));
+  if (parsedSecond != INVALID) {
+    rtc.setSecond(parsedSecond);
+  }
+  Serial.println("Selected time: " + String(parsedTime.hour) + ":" + String(parsedTime.minute) + ":" + String(parsedSecond));
   return parsedTime;
 }
 

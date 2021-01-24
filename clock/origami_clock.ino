@@ -1,13 +1,18 @@
+#include <Wire.h>
+#include <DS3231.h>
+
 int LEDS[12] = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13};
 int CENTER_LED = A2;
 int POT = A0;
 int PHOTO = A1;
 
-int INVALID = -1;
+byte INVALID = -1;
+
+DS3231 rtc;
 
 struct Time {
-  int hour;
-  int minute;
+  byte hour;
+  byte minute;
 };
 
 Time currentTime = {
@@ -16,18 +21,19 @@ Time currentTime = {
 };
 
 Time getTimeFromUser();
-int parseHour(char* timeInput);
-int parseMinute(char* timeInput);
+byte parseHour(char* timeInput);
+byte parseMinute(char* timeInput);
 void setupLeds();
 void turnAllOff();
-void setHour(int hour);
-void setMinute(int minute);
+void lightHour(byte hour);
+void lightMinute(byte minute);
 bool isTriggered();
 
 void setup() {
   Serial.begin(9600);
+  Wire.begin();
   setupLeds();
-  
+
   // Wait until we receive a valid time to display (this will eventually happen in the loop, based on the RTC module).
   while (currentTime.hour == INVALID && currentTime.minute == INVALID) {
     // wait for input from the user with the time.  Time must be formatted as HH:mm.  Eventually we'll check the time from the RTC module.
@@ -41,19 +47,25 @@ void loop() {
   // turn everything off
   turnAllOff();
 
+  // Update the time from the rtc module.
+  bool h12;
+  bool pmTime;
+  currentTime.hour = rtc.getHour(h12, pmTime);
+  currentTime.minute = rtc.getMinute();
+
   // light up the hour
-  setHour(currentTime.hour);
+  lightHour(currentTime.hour);
 
   // light up the minute
-  setMinute(currentTime.minute);
+  lightMinute(currentTime.minute);
 
   delay(3000); // Allow a few seconds for the user to move the laser away.
 
   while (!isTriggered()) {} // Wait for the photoresistor to be toggled off.
-  
+
   // turn everything off, and start the loop over.
   turnAllOff();
-  
+
   delay(3000); // Allow a few seconds for the user to move the laser away.
 }
 
@@ -62,9 +74,9 @@ void setupLeds() {
     pinMode(LEDS[pin], OUTPUT);
   }
   pinMode(CENTER_LED, OUTPUT);
-  
+
   turnAllOff();
-  
+
   digitalWrite(CENTER_LED, HIGH);
   delay(250);
   digitalWrite(CENTER_LED, LOW);
@@ -76,17 +88,17 @@ void setupLeds() {
 }
 
 /** Returns INVALID if the input is not a number. */
-int parseHour(String timeInput) {
+byte parseHour(String timeInput) {
   String hour = timeInput.substring(0, 2);
   if (!isDigit(hour.charAt(0)) && !isDigit(hour.charAt(1))) return INVALID;
-  return hour.toInt();
+  return (byte)(hour.toInt());
 }
 
 /** Returns -1 if the input is not a number. */
-int parseMinute(String timeInput) {
+byte parseMinute(String timeInput) {
   String minute = timeInput.substring(3, 5);
   if (!isDigit(minute.charAt(0)) && !isDigit(minute.charAt(1))) return INVALID;
-  return minute.toInt();
+  return (byte)(minute.toInt());
 }
 
 /** Waits for the user to send a time over serial.
@@ -100,6 +112,12 @@ Time getTimeFromUser() {
   struct Time parsedTime;
   parsedTime.hour = parseHour(timeInput);
   parsedTime.minute = parseMinute(timeInput);
+  if (parsedTime.hour != INVALID) {
+    rtc.setHour(parsedTime.hour);
+  }
+  if (parsedTime.minute != INVALID) {
+    rtc.setMinute(parsedTime.minute);
+  }
   Serial.println("Selected time: " + String(parsedTime.hour) + ":" + String(parsedTime.minute));
   // Tell any Serial listeners to set their minute hand, only.
   Serial.println("Setting minute to:");
@@ -115,13 +133,13 @@ void turnAllOff() {
   digitalWrite(CENTER_LED, LOW);
 }
 
-void setHour(int hour) {
+void lightHour(byte hour) {
   if (hour == INVALID) return; // Ignore this, it's not a valid hour.
   digitalWrite(LEDS[hour % 12], HIGH);
   digitalWrite(CENTER_LED, HIGH);
 }
 
-void setMinute(int minute) {
+void lightMinute(byte minute) {
   if (minute == INVALID) return; // Ignore this, it's not a valid minute.
   int pin = minute / 5;
   digitalWrite(LEDS[pin], HIGH);

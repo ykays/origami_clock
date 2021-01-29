@@ -136,7 +136,7 @@ Time getTimeFromRtc() {
 }
 
 /** Waits for the user to send a time over serial.
- *  - The time should be in the format HH:mm.
+ *  - The time should be in the format HH:mm:ss.
  *  - The function will block and the return the string.
  */
 Time getTimeFromUser() {
